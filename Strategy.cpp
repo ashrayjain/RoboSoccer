@@ -2,6 +2,8 @@
 #include "Strategy.h"
 
 #include <math.h>
+#define SWEEP_1_ 0.2
+#define SWEEP_2_ 0.35
  
 BOOL APIENTRY DllMain( HANDLE hModule, 
                        DWORD  ul_reason_for_call, 
@@ -25,7 +27,7 @@ void Position( Robot *robot, double x, double y, double offset=0.0);
 void goalie(Environment *env);
 void goalie_angle(Robot* robot, double desired_angle);
 bool set_goalie_right(Robot *robot);
-void PredictBall ( Environment *env );
+void PredictBall ( Environment *env, int elapsedCycles = 1 );
 void general(Environment *env);
 void penalty_goalie(Environment *env);
 void penalty_attack(Environment *env);
@@ -35,7 +37,7 @@ void for_defense(Environment *env);
 double distance(Vector3D v1, Vector3D v2);
 bool set_def_orn(Robot* r, Ball ball);
 void angleToVelocity(Robot* , double); 
-
+void rushToBall(Robot* r, Environment* env);
 const double PI = 3.1415923;
 
 int i;
@@ -91,9 +93,48 @@ double distance(Vector3D v1, Vector3D v2)
 	return sqrt(pow(v2.x-v1.x, 2) + pow(v2.y-v1.y, 2) + pow(v2.z-v1.z, 2));
 }
 
+bool set_robot_right(Robot &r, double positionY, double offset)
+{
+	if(r.pos.x > positionY - offset  && r.pos.x < positionY + offset)
+    {
+        if(r.rotation >= 88 && r.rotation <= 92)
+            return true;
+        else
+			goalie_angle(&r, 90.0);
+    }
+    else//not the right x
+    {
+        if(r.rotation > -2 && r.rotation < 2)//right orientation
+        {
+            if(r.pos.x < positionY - offset)    //go forward
+                Velocity(&r, 125, 125);
+			else if(r.pos.x > positionY + offset) //go backward
+                Velocity(&r, -125, -125);
+        }
+        else
+			goalie_angle(&r, 0.0);
+    }
+    return false;
+
+
+}
+
+void sweep(Robot &r, double positionX, double positionY)
+{
+	if (set_robot_right(r, positionX, 3)) {
+		if(positionY > r.pos.y + 1)
+            Velocity(&r, 125, 125);
+		else if(positionY < r.pos.y - 1)
+            Velocity(&r, -125, -125);
+        else
+            Velocity(&r, 0, 0);
+	}
+}
+
 void for_attack(Environment* env)
-{       
+{
 	Robot *sweeper, *non_sweeper, *active_attack, *passive_attack;
+	
 	if(distance(env->home[3].pos, env->currentBall.pos) < distance(env->home[4].pos, env->currentBall.pos))
 	{
 		active_attack = &env->home[3];
@@ -104,13 +145,24 @@ void for_attack(Environment* env)
 		active_attack = &env->home[4];
 		passive_attack = &env->home[3];
 	}
-	if(passive_attack->pos.x < env->predictedBall.pos.x-30) {
-		Position(passive_attack, env->predictedBall.pos.x-25, (FTOP-FBOT)/2, 5);
+
+	if(env->predictedBall.pos.x < active_attack->pos.x) {
+		Position(active_attack, env->predictedBall.pos.x-15, FTOP, 5);
 	}
-	else if(passive_attack->pos.x > env->predictedBall.pos.x-10) {
-		Position(passive_attack, env->predictedBall.pos.x-15, (FTOP-FBOT)/2, 5);
+	else {
+		rushToBall(active_attack, env);//Position(active_attack, env->predictedBall.pos.x, env->predictedBall.pos.y);
 	}
-	Position(active_attack, env->predictedBall.pos.x, env->predictedBall.pos.y);
+
+	if(env->predictedBall.pos.x < passive_attack->pos.x) {
+		Position(passive_attack, env->predictedBall.pos.x-15, FBOT, 5);
+	}
+	else{// if(passive_attack->pos.x < env->predictedBall.pos.x-8) {
+		Position(passive_attack, env->predictedBall.pos.x-10, (FTOP-FBOT)/2, 5);
+	}
+	//else if(passive_attack->pos.x > env->predictedBall.pos.x-10) {
+		//Position(passive_attack, env->predictedBall.pos.x-15, (FTOP-FBOT)/2, 5);
+	//}
+
     if(env->home[1].pos.x < env->home[2].pos.x)
     {
         sweeper = &env->home[1];
@@ -121,9 +173,19 @@ void for_attack(Environment* env)
         sweeper = &env->home[2];
         non_sweeper = &env->home[1];
     }
-	Position(sweeper, PRIGHTX, env->predictedBall.pos.y, 5);
-	Position(non_sweeper, HALFLINE, env->predictedBall.pos.y, 5);        
+	double yPos = 0.8 * (env->predictedBall.pos.y - (FTOP - FBOT)/2) + (FTOP - FBOT)/2;
+
+	if(distance(sweeper->pos, env->currentBall.pos) > 26 || env->predictedBall.pos.x > 0.5 * (FRIGHTX - FLEFTX)) {
+		sweep(*sweeper, SWEEP_1_*(FRIGHTX-FLEFTX),yPos);
+	} else {
+		rushToBall(sweeper, env);
+	}
+
+	sweep(*non_sweeper, SWEEP_2_*(FRIGHTX-FLEFTX), env->predictedBall.pos.y);
 }
+
+
+
 bool set_def_orn(Robot* r, Ball ball)
 {
 	if((r->pos.x>ball.pos.x) || ((r->pos.x + 10 > ball.pos.x) && !(r->rotation < 2 && r->rotation > -2)))
@@ -298,10 +360,10 @@ void Velocity ( Robot *robot, int vl, int vr )
     robot->velocityRight = vr;
 }
 
-void PredictBall ( Environment *env )
+void PredictBall ( Environment *env, int elapsedCycles)
 {
-    double dx = env->currentBall.pos.x - env->lastBall.pos.x;
-    double dy = env->currentBall.pos.y - env->lastBall.pos.y;
+    double dx = elapsedCycles*(env->currentBall.pos.x - env->lastBall.pos.x);
+    double dy = elapsedCycles*(env->currentBall.pos.y - env->lastBall.pos.y);
     env->predictedBall.pos.x = env->currentBall.pos.x + dx;
     env->predictedBall.pos.y = env->currentBall.pos.y + dy;
 }
@@ -321,6 +383,23 @@ void Position( Robot *robot, double x, double y, double offset)
 		Angle(robot, reqAngle);
 	}
         
+}
+
+void rushToBall(Robot* r, Environment* env) {
+	for(int i = 1;i<10;i++) {
+		PredictBall(env,i);
+		if(distance(env->predictedBall.pos,r->pos) <= i*4) {
+			Position(r,env->predictedBall.pos.x, env->predictedBall.pos.y);
+			break;
+		}
+	}
+
+	if (i == 10) {
+		Position(r,env->currentBall.pos.x,env->currentBall.pos.y);
+	}
+
+	PredictBall(env);
+
 }
 
 void Angle ( Robot *robot, double desired_angle)
@@ -375,7 +454,8 @@ void goalie_angle(Robot* robot, double desired_angle)
 
 bool set_goalie_right(Robot *robot)
 {
-    if(robot->pos.x > 8 && robot->pos.x < 10)
+	return set_robot_right(*robot, 9, 1);
+    /*if(robot->pos.x > 8 && robot->pos.x < 10)
     {
         if(robot->rotation >= 88 && robot->rotation <= 92)
             return true;
@@ -392,10 +472,9 @@ bool set_goalie_right(Robot *robot)
                 Velocity(robot, -125, -125);
         }
         else
-			angleToVelocity(robot, 0);
-            //goalie_angle(robot, 0.0);
+            goalie_angle(robot, 0.0);
     }
-    return false;
+    return false;*/
 
 }
 
@@ -412,7 +491,7 @@ void goalie(Environment *env)
         else
             Velocity(&env->home[0], 0, 0);
 
-		if (fabs(env->predictedBall.pos.x-env->home[0].pos.x) < 4) {
+		if (fabs(env->predictedBall.pos.x-env->home[0].pos.x) < 2) {
 			if(env->predictedBall.pos.y > env->home[0].pos.y)
 				Velocity(&env->home[0], 125, 125);
 			else
@@ -434,7 +513,7 @@ extern "C" STRATEGY_API void Strategy ( Environment *env )
                                 penalty_goalie(env);
                             break;
         default:            //general(env);
-							for_defense(env);
+							for_attack(env);
 			
 			break;
     }
