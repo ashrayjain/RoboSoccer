@@ -38,8 +38,10 @@ void angleToVelocity(Robot* , double);
 
 const double PI = 3.1415923;
 
+int i;
 extern "C" STRATEGY_API void Create ( Environment *env )
 {
+	i = 0;
     // allocate user data and assign to env->userData
     // eg. env->userData = ( void * ) new MyVariables ();
 }
@@ -47,41 +49,49 @@ extern "C" STRATEGY_API void Create ( Environment *env )
 extern "C" STRATEGY_API void Destroy ( Environment *env )
 {
     // free any user data created in Create ( Environment * )
+	i = 0;
 
     // eg. if ( env->userData != NULL ) delete ( MyVariables * ) env->userData;
 }
 
-//int i = 0;
-extern "C" STRATEGY_API void Strategy ( Environment *env )
-{
-    PredictBall(env);
-    switch(env->gameState)
-    {
-        case FREE_BALL:     break;
-        case PENALTY_KICK:  //if(env->whosBall == YELLOW_BALL)
-                                penalty_attack(env);
-                            //else
-                                penalty_goalie(env);
-                            break;
-        default:            general(env);break;
-    }
-    if(env->currentBall.pos.x > 50.0)
-        for_attack(env);
-	else
-		for_defense(env);
-	//check_valid(env);
-	/*if(i>60)
-		angleToVelocity(&env->home[1], -90.0);
-	else
-		Velocity(&env->home[1], 50, 50);
-	i++;*/
 
+
+void shootingAlgo() {
+
+
+}
+
+double rotationAlgo(double wM, double wTPrime) 
+{
+	return wM - pow((1 - 0.268), 1./60) * (wM - wTPrime);
+}
+
+double currentAngularVelocity(Robot &r)
+{
+	return 0.268 * (r.velocityRight - r.velocityLeft);
+}
+
+double currentV(double wM) 
+{
+	return wM / 0.268;
+}
+
+double kV(Robot &r)
+{
+	return (0.914*pow(2.718, -0.0209 * fabs(r.velocityRight-r.velocityLeft)) + (1-0.914));
+}
+
+double currentStraightVelocity(Robot &r)
+{
+	// Kv = (0.914*e^(-0.0209 * abs diff in Vel)) + (1-0.914)
+	return 0.0076 * (r.velocityLeft + r.velocityRight) * kV(r);
 }
 
 double distance(Vector3D v1, Vector3D v2)
 {
 	return sqrt(pow(v2.x-v1.x, 2) + pow(v2.y-v1.y, 2) + pow(v2.z-v1.z, 2));
 }
+
 void for_attack(Environment* env)
 {   
     
@@ -96,8 +106,13 @@ void for_attack(Environment* env)
 		active_attack = &env->home[4];
 		passive_attack = &env->home[3];
 	}
-	Position(passive_attack, env->predictedBall.pos.x-20, (FTOP-FBOT)/2, 5);
-
+	if(passive_attack->pos.x < env->predictedBall.pos.x-30) {
+		Position(passive_attack, env->predictedBall.pos.x-25, (FTOP-FBOT)/2, 5);
+	}
+	else if(passive_attack->pos.x > env->predictedBall.pos.x-10) {
+		Position(passive_attack, env->predictedBall.pos.x-15, (FTOP-FBOT)/2, 5);
+	}
+	Position(active_attack, env->predictedBall.pos.x, env->predictedBall.pos.y);
     if(env->home[1].pos.x < env->home[2].pos.x)
     {
         sweeper = &env->home[1];
@@ -341,4 +356,64 @@ void goalie(Environment *env)
         else
             Velocity(&env->home[0], 0, 0);
     }
+}
+
+extern "C" STRATEGY_API void Strategy ( Environment *env )
+{
+    PredictBall(env);
+    switch(env->gameState)
+    {
+        case FREE_BALL:     break;
+        case PENALTY_KICK:  //if(env->whosBall == YELLOW_BALL)
+                                penalty_attack(env);
+                            //else
+                                penalty_goalie(env);
+                            break;
+        default:            //general(env);
+			
+			break;
+    }
+	/*
+	if (i < 60) {
+		double wTPrime = currentAngularVelocity(env->home[0]);
+		double wM = 360;
+		double newWT = rotationAlgo(wM, wTPrime);
+		double v = currentV(newWT);
+		
+		Velocity(&env->home[0], 0, v);
+		i++;
+	}
+	else {
+		double wTPrime = currentAngularVelocity(env->home[0]);
+		//double wM = 0;
+		//double newWT = rotationAlgo(wM, wTPrime);
+		double v = currentV(wTPrime);
+		
+		Velocity(&env->home[0], -env->home[0].velocityLeft, -env->home[0].velocityRight);
+	}
+	
+
+	/*if (env->currentBall.pos.x > env->home[0].pos.x)
+	{
+		Velocity(&env->home[0], , 50);
+	}
+	else
+*/
+	
+
+
+	
+    
+	//if(env->currentBall.pos.x > 50.0)
+        for_attack(env);
+	//else
+	//	for_defense(env);
+	goalie(env);
+	//check_valid(env);
+	/*if(i>60)
+		angleToVelocity(&env->home[1], -90.0);
+	else
+		Velocity(&env->home[1], 50, 50);
+	i++;*/
+
 }
