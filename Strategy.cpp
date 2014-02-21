@@ -41,7 +41,6 @@ const double PI = 3.1415923;
 int i;
 extern "C" STRATEGY_API void Create ( Environment *env )
 {
-	i = 0;
     // allocate user data and assign to env->userData
     // eg. env->userData = ( void * ) new MyVariables ();
 }
@@ -49,13 +48,11 @@ extern "C" STRATEGY_API void Create ( Environment *env )
 extern "C" STRATEGY_API void Destroy ( Environment *env )
 {
     // free any user data created in Create ( Environment * )
-	i = 0;
-
     // eg. if ( env->userData != NULL ) delete ( MyVariables * ) env->userData;
 }
 
 
-
+/*
 void shootingAlgo() {
 
 
@@ -87,14 +84,15 @@ double currentStraightVelocity(Robot &r)
 	return 0.0076 * (r.velocityLeft + r.velocityRight) * kV(r);
 }
 
+*/
+
 double distance(Vector3D v1, Vector3D v2)
 {
 	return sqrt(pow(v2.x-v1.x, 2) + pow(v2.y-v1.y, 2) + pow(v2.z-v1.z, 2));
 }
 
 void for_attack(Environment* env)
-{   
-    
+{       
 	Robot *sweeper, *non_sweeper, *active_attack, *passive_attack;
 	if(distance(env->home[3].pos, env->currentBall.pos) < distance(env->home[4].pos, env->currentBall.pos))
 	{
@@ -272,7 +270,7 @@ void Angle ( Robot *robot, double desired_angle)
 {
     double theta_e;
     int vl, vr;
-    short hard_turn = 0;
+    short hard_turn = -1;
     theta_e = desired_angle - robot->rotation;
     
     while (theta_e > 180) theta_e -= 360;
@@ -283,16 +281,15 @@ void Angle ( Robot *robot, double desired_angle)
     if(theta_e < -10)
     {
         vl = (pow(theta_e, 2)/(90.0*90.0)*125+15);
-        vr = hard_turn*(pow(theta_e, 2)/(90.0*90.0)*50+5);
+        vr = hard_turn*(pow(theta_e, 2)/(90.0*90.0)*40);
     }
     else if(theta_e > 10)
     {
         vr = (pow(theta_e, 2)/(90.0*90.0)*125+15);
-        vl = hard_turn*(pow(theta_e, 2)/(90.0*90.0)*50+5);
+        vl = hard_turn*(pow(theta_e, 2)/(90.0*90.0)*40);
     } 
     else
         vr = vl = 125;
-
 
     Velocity (robot, vl, vr);
 }
@@ -321,9 +318,9 @@ void goalie_angle(Robot* robot, double desired_angle)
 
 bool set_goalie_right(Robot *robot)
 {
-    if(robot->pos.x > 9 && robot->pos.x < 11)
+    if(robot->pos.x > 8 && robot->pos.x < 10)
     {
-        if(robot->rotation > 88 && robot->rotation < 92)
+        if(robot->rotation >= 88 && robot->rotation <= 92)
             return true;
         else
             goalie_angle(robot, 90.0);
@@ -332,13 +329,14 @@ bool set_goalie_right(Robot *robot)
     {
         if(robot->rotation > -2 && robot->rotation < 2)//right orientation
         {
-            if(robot->pos.x < 9)    //go forward
-                Velocity(robot, 80, 80);
-            else if(robot->pos.x > 11) //go backward
-                Velocity(robot, -80, -80);
+            if(robot->pos.x < 8)    //go forward
+                Velocity(robot, 125, 125);
+            else if(robot->pos.x > 10) //go backward
+                Velocity(robot, -125, -125);
         }
         else
-            goalie_angle(robot, 0.0);
+			angleToVelocity(robot, 0);
+            //goalie_angle(robot, 0.0);
     }
     return false;
 
@@ -349,12 +347,20 @@ void goalie(Environment *env)
     if(set_goalie_right(&env->home[0]))
 	{   
         int ball_y = (env->predictedBall.pos.y<GBOTY)?GBOTY:((env->predictedBall.pos.y>GTOPY)?GTOPY:env->predictedBall.pos.y);
+		
         if(ball_y > env->home[0].pos.y + 1)
             Velocity(&env->home[0], 125, 125);
         else if(ball_y < env->home[0].pos.y - 1)
             Velocity(&env->home[0], -125, -125);
         else
             Velocity(&env->home[0], 0, 0);
+
+		if (fabs(env->predictedBall.pos.x-env->home[0].pos.x) < 4) {
+			if(env->predictedBall.pos.y > env->home[0].pos.y)
+				Velocity(&env->home[0], 125, 125);
+			else
+				Velocity(&env->home[0], -125, -125);
+		}
     }
 }
 
@@ -405,10 +411,13 @@ extern "C" STRATEGY_API void Strategy ( Environment *env )
 	
     
 	//if(env->currentBall.pos.x > 50.0)
-        for_attack(env);
+    //    for_attack(env);
 	//else
 	//	for_defense(env);
+	//goalie(env);
+	//Angle(&env->home[0], 0);
 	goalie(env);
+	//angleToVelocity(&env->home[0], 180);
 	//check_valid(env);
 	/*if(i>60)
 		angleToVelocity(&env->home[1], -90.0);
