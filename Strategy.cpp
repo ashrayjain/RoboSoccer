@@ -280,7 +280,6 @@ void Angle ( Robot *robot, double desired_angle)
 
 
     Velocity (robot, vl, vr);
-    
 }
 
 void goalie_angle(Robot* robot, double desired_angle)
