@@ -142,9 +142,9 @@ bool set_def_orn(Robot* r, Ball ball)
 }
 void for_defense(Environment* env)
 {
-
-	Position(&env->home[3], HALFLINE, env->home[3].pos.y, 5);
-	Position(&env->home[4], HALFLINE, env->home[4].pos.y, 5);
+	double HALFLINE = 15.0;
+	Position(&env->home[3], HALFLINE, env->home[3].pos.y);
+	Position(&env->home[4], HALFLINE, env->home[4].pos.y);
 	Robot *active_def, *passive_def;
 
 	active_def = (&env->home[1].pos.x > &env->home[2].pos.x)?&env->home[2]:&env->home[1];
@@ -153,7 +153,64 @@ void for_defense(Environment* env)
 	set_def_orn(passive_def, env->predictedBall);
 	Position(active_def, PRIGHTX, env->predictedBall.pos.y, 2);
 
+	/*
+	int dist[2][2] = {{MAXINT, 0}, {MAXINT, 0}};
+	int sweepRam [2] = {0,0};
 
+	for (int i = 1; i < 5; i++) {
+		int temp = distance(env->home[i].pos, env->predictedBall.pos);
+
+		if (temp < dist[0][0]) {
+			if(sweepRam[0] != 0) {
+				sweepRam[0] = dist[1][1];
+			} else {
+				sweepRam[1] = dist[1][1];
+			}
+
+			dist[1][0] = dist[0][0];
+			dist[0][0] = temp;
+			dist[1][1] = dist[0][1];
+			dist[0][1] = i;
+		} else if (temp < dist[1][0]) {
+			if(sweepRam[0] != 0) {
+				sweepRam[0] = dist[1][1];
+			} else {
+				sweepRam[1] = dist[1][1];
+			}
+
+			dist[1][0] = temp;
+			dist[1][1] = i;
+		}
+	}
+
+	Robot *marker1 = &env->home[dist[0][1]], *marker2 = &env->home[dist[1][1]];
+
+	Position(marker1, env->predictedBall.pos.x, env->predictedBall.pos.y, 0.0);
+
+	if (marker2->pos.x > env->predictedBall.pos.x) {
+		if (marker2->pos.y == env->predictedBall.pos.y) {
+			Position(marker2, env->predictedBall.pos.x - 10, env->predictedBall.pos.y + 10);
+		} else {
+			Position(marker2, env->predictedBall.pos.x - 10, marker2->pos.y);
+		}
+	}
+
+	int opponentToRam = 1;
+	Robot* sweeper = (env->home[sweepRam[0]].pos.x < env->home[sweepRam[1]].pos.x)? &env->home[sweepRam[0]]:&env->home[sweepRam[1]];
+	Robot* rammer = (env->home[sweepRam[0]].pos.x < env->home[sweepRam[1]].pos.x)? &env->home[sweepRam[1]]:&env->home[sweepRam[0]];
+
+	for (int i = 1; i < 5; i++) {
+		if (env->opponent[i].pos.x < env->opponent[opponentToRam].pos.x) {
+			opponentToRam = i;
+		}
+	}
+
+	Position(rammer, env->opponent[opponentToRam].pos.x, env->opponent[opponentToRam].pos.y);
+
+	int sweeperY = GTOPY - (env->home[0].pos.y - GBOTY);
+
+	//Position(sweeper, env->home[0].pos.x + 10, sweeperY);
+	*/
 }
 
 const double Kp = 0.5, Kd = -0.256446;
@@ -361,6 +418,7 @@ void goalie(Environment *env)
 extern "C" STRATEGY_API void Strategy ( Environment *env )
 {
     PredictBall(env);
+	goalie(env);
     switch(env->gameState)
     {
         case FREE_BALL:     break;
@@ -370,6 +428,7 @@ extern "C" STRATEGY_API void Strategy ( Environment *env )
                                 penalty_goalie(env);
                             break;
         default:            //general(env);
+							for_defense(env);
 			
 			break;
     }
@@ -405,10 +464,9 @@ extern "C" STRATEGY_API void Strategy ( Environment *env )
 	
     
 	//if(env->currentBall.pos.x > 50.0)
-        for_attack(env);
+      //  for_attack(env);
 	//else
 	//	for_defense(env);
-	goalie(env);
 	//check_valid(env);
 	/*if(i>60)
 		angleToVelocity(&env->home[1], -90.0);
